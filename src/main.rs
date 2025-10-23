@@ -60,7 +60,7 @@ async fn main() {
 
     let start = Instant::now();
     for _ in 0..100 {
-        logger.send(&user);
+        logger.error(&user);
     }
 
     println!("FOR LOOP DONE SENDING {:?}", start.elapsed())

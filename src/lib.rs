@@ -127,17 +127,17 @@ impl Logger {
         }
     }
 
-    pub fn send<T: Serialize>(self: &Self, data: &T) {
+    fn log<T: Serialize>(self: &Self, data: &T, log_level: LogLevels) {
         let value = match serde_json::to_value(data) {
             Ok(v) => v,
             Err(e) => {
-                eprint!("Failed to serialize {}", e);
+                eprintln!("Failed to serialize {}", e);
                 return;
             }
         };
 
         let x = LogObject {
-            log_level: LogLevels::Info,
+            log_level,
             data: value,
         };
 
@@ -148,6 +148,21 @@ impl Logger {
                 TrySendError::Closed(_) => eprintln!("CHANNEL CLOSED"),
             },
         }
+    }
+    pub fn info<T: Serialize>(self: &Self, data: &T) {
+        self.log(data, LogLevels::Info);
+    }
+
+    pub fn error<T: Serialize>(self: &Self, data: &T) {
+        self.log(data, LogLevels::Error);
+    }
+
+    pub fn warn<T: Serialize>(self: &Self, data: &T) {
+        self.log(data, LogLevels::Warn);
+    }
+
+    pub fn debug<T: Serialize>(self: &Self, data: &T) {
+        self.log(data, LogLevels::Debug);
     }
 }
 
