@@ -1,3 +1,5 @@
+use std::vec;
+
 use serde;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -34,13 +36,13 @@ impl Default for LoggerOptions {
 #[derive(Serialize)]
 struct LogObject {
     log_level: LogLevels,
-    message: Value,
+    data: Value,
 }
 impl Default for LogObject {
     fn default() -> Self {
         Self {
             log_level: LogLevels::Info,
-            message: serde_json::to_value(String::from("not set")).unwrap(),
+            data: serde_json::to_value(String::from("not set")).unwrap(),
         }
     }
 }
@@ -69,10 +71,18 @@ impl Logger {
         Logger { sender }
     }
 
-    pub fn send<T: Serialize>(self: Self, value: serde_json::Value) {
+    pub fn send<T: Serialize>(self: &Self, data: &T) {
+        let value = match serde_json::to_value(data) {
+            Ok(v) => v,
+            Err(e) => {
+                eprint!("Failed to serialize {}", e);
+                return;
+            }
+        };
+
         let x = LogObject {
             log_level: LogLevels::Info,
-            message: value,
+            data: value,
         };
 
         match self.sender.try_send(x) {
@@ -85,6 +95,59 @@ impl Logger {
     }
 }
 
+#[derive(Serialize, Debug)]
+enum Items {
+    Apple,
+    Ipod,
+    Puter,
+    Steak,
+}
+
+#[derive(Serialize, Debug)]
+enum ToyotaModel {
+    Rav3,
+    Camry,
+}
+
+#[derive(Serialize, Debug)]
+enum TeslaModel {
+    Model3,
+    ModelS,
+}
+
+#[derive(Serialize, Debug)]
+enum Car {
+    Toyota(ToyotaModel),
+    Tesla(TeslaModel),
+}
+
+#[derive(Serialize, Debug)]
+struct Child {
+    toy: String,
+    age: usize,
+}
+#[derive(Serialize, Debug)]
+struct User {
+    name: String,
+    age: usize,
+    items: Vec<Items>,
+    children: Vec<Child>,
+    car: Car,
+}
 fn main() {
     let logger = Logger::new(None);
+
+    let user = User {
+        name: "Jose".to_string(),
+        age: 43,
+        items: vec![Items::Ipod, Items::Steak],
+        car: Car::Tesla(TeslaModel::ModelS),
+        children: vec![Child {
+            age: 12,
+            toy: "beans".to_string(),
+        }],
+    };
+    logger.send(&user);
+
+    println!("USER outside logger {:#?}", &user)
 }
