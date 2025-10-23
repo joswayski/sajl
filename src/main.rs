@@ -25,8 +25,7 @@ struct Request {
     state: Status,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let logger = Logger::new(None);
 
     logger.info(&Request {

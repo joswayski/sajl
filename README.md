@@ -6,11 +6,14 @@
 
 ### ⚠️ WIP ⚠️
 
+Async JSON logger with batched writes and colorized output for any `Serialize` type.
+
+**Requirements:** Tokio runtime, Serde
 
 ## Usage
 
 ```bash
-cargo add sajl serde
+cargo add sajl serde tokio
 ```
 
 ```rust
@@ -61,6 +64,7 @@ async fn main() {
     logger.error(&"Connection timeout");
 }
 ```
+
 
 **Output:**
 ```json
