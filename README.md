@@ -65,7 +65,6 @@ async fn main() {
 }
 ```
 
-
 **Output:**
 ```json
 {"level":"INFO","timestamp":"2024-10-23T15:30:45.123Z","data":{"method":"GET","path":"/api/users","status":200,"cached":false,"users":[{"id":1,"name":"Alice","verified":true},{"id":2,"name":"Bob","verified":false}],"state":"Active"}}
