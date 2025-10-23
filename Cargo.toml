@@ -5,7 +5,7 @@ edition = "2024"
 description = "Simple Async JSON Logger"
 license = "MIT"
 readme = "README.md"
-repository = "github.com/joswayski/sajl"
+repository = "https://github.com/joswayski/sajl"
 keywords = ["json", "structured", "logging" ]
 
 
