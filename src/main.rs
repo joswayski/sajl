@@ -1,65 +1,54 @@
 use sajl::Logger;
 use serde::Serialize;
 
-#[derive(Serialize, Debug)]
-enum Items {
-    Apple,
-    Ipod,
-    Puter,
-    Steak,
+#[derive(Serialize)]
+enum Status {
+    Active,
+    Inactive,
+    RateLimited { retry_after: u32 },
 }
 
-#[derive(Serialize, Debug)]
-enum ToyotaModel {
-    Rav3,
-    Camry,
-}
-
-#[derive(Serialize, Debug)]
-enum TeslaModel {
-    Model3,
-    ModelS,
-}
-
-#[derive(Serialize, Debug)]
-enum Car {
-    Toyota(ToyotaModel),
-    Tesla(TeslaModel),
-}
-
-#[derive(Serialize, Debug)]
-struct Child {
-    toy: String,
-    age: usize,
-}
-#[derive(Serialize, Debug)]
+#[derive(Serialize)]
 struct User {
+    id: u64,
     name: String,
-    age: usize,
-    items: Vec<Items>,
-    children: Vec<Child>,
-    car: Car,
+    verified: bool,
+}
+
+#[derive(Serialize)]
+struct Request {
+    method: String,
+    path: String,
+    status: u16,
+    cached: bool,
+    users: Vec<User>,
+    state: Status,
 }
 
 #[tokio::main]
 async fn main() {
     let logger = Logger::new(None);
 
-    let user = User {
-        name: "Jose".to_string(),
-        age: 43,
-        items: vec![Items::Ipod, Items::Steak],
-        car: Car::Tesla(TeslaModel::ModelS),
-        children: vec![Child {
-            age: 12,
-            toy: "beans".to_string(),
-        }],
-    };
+    logger.info(&Request {
+        method: "GET".into(),
+        path: "/api/users".into(),
+        status: 200,
+        cached: false,
+        users: vec![
+            User {
+                id: 1,
+                name: "Alice".into(),
+                verified: true,
+            },
+            User {
+                id: 2,
+                name: "Bob".into(),
+                verified: false,
+            },
+        ],
+        state: Status::Active,
+    });
 
-    for _ in 0..2 {
-        logger.info(&user);
-        logger.warn(&user);
-        logger.error(&user);
-        logger.debug(&user);
-    }
+    logger.warn(&Status::RateLimited { retry_after: 60 });
+    logger.error(&"Connection timeout");
 }

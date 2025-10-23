@@ -185,7 +185,7 @@ fn flush_batch(batch: &[LogObject]) {
         };
         writeln!(
             stderr,
-            r#"{{"level":"{}","timestamp": {}, "data":{}}}"#,
+            r#"{{"level":"{}","timestamp":"{}","data":{}}}"#,
             with_color,
             log.timestamp,
             serde_json::to_string(&log.data).unwrap()
