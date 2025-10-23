@@ -3,8 +3,8 @@ use std::io::{Write, stderr};
 use serde;
 use serde::Serialize;
 use serde_json::{Value, json};
-use tokio::sync::mpsc::{Sender, error::TrySendError};
-use tokio::time::{self, timeout};
+use tokio::sync::mpsc::error::TrySendError;
+use tokio::time::{self};
 
 // Size of the channel - max messages you can send at one time
 const DEFAULT_BUFFER_SIZE: usize = 1024;
@@ -66,7 +66,8 @@ impl Default for LogObject {
     }
 }
 pub struct Logger {
-    sender: Sender<LogObject>,
+    log_sender: tokio::sync::mpsc::Sender<LogObject>,
+    // shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
 
 impl Logger {
@@ -75,32 +76,44 @@ impl Logger {
         let buffer_size = options.buffer_size.unwrap_or_default();
         let batch_size = options.batch_size.unwrap_or_default();
         let batch_duration = options.batch_duration_ms.unwrap_or_default();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<LogObject>(buffer_size);
+
+        let (log_sender, mut log_receiver) = tokio::sync::mpsc::channel::<LogObject>(buffer_size);
+        // let (shutdown_sender, mut shutdown_receiver) = tokio::sync::broadcast::channel::<()>(1);
 
         tokio::spawn(async move {
             let mut batch = Vec::<LogObject>::with_capacity(batch_size);
+            let mut flush_interval =
+                tokio::time::interval(time::Duration::from_millis(batch_duration));
+            flush_interval.tick().await; // Skip the first tick
 
             loop {
-                match timeout(time::Duration::from_millis(batch_duration), receiver.recv()).await {
-                    Ok(Some(log)) => {
-                        // Found a log!
-                        batch.push(log);
-                        if batch.len() >= batch_size {
-                            flush(&batch);
-                            batch.clear();
+                tokio::select! {
+                    result =   log_receiver.recv() => {
+                        match result {
+                            Some(log) => {
+                                // Found a log!
+                                batch.push(log);
+                                if batch.len() >= batch_size {
+                                    println!("Flushing");
+                                    flush_batch(&batch);
+                                    batch.clear();
+                                }
+                            }
+                          None => {
+                                // Channel closed, flush before dropping
+                                if !batch.is_empty() {
+                                    println!("Flushing due to channel closure");
+                                    flush_batch(&batch);
+                                }
+                                break;
+                            }
                         }
                     }
-                    Ok(None) => {
-                        // Channel closed, flush before dropping
+                    _ = flush_interval.tick() => {
+                        // Close and flush
                         if !batch.is_empty() {
-                            flush(&batch);
-                        }
-                        break;
-                    }
-                    Err(_) => {
-                        // timeout received
-                        if !batch.is_empty() {
-                            flush(&batch);
+                            println!("Flushing due to batch time");
+                            flush_batch(&batch);
                             batch.clear();
                         }
                     }
@@ -108,10 +121,13 @@ impl Logger {
             }
         });
 
-        Logger { sender }
+        Logger {
+            log_sender,
+            // shutdown_sender,
+        }
     }
 
-    fn send<T: Serialize>(self: &Self, data: &T) {
+    pub fn send<T: Serialize>(self: &Self, data: &T) {
         let value = match serde_json::to_value(data) {
             Ok(v) => v,
             Err(e) => {
@@ -125,7 +141,7 @@ impl Logger {
             data: value,
         };
 
-        match self.sender.try_send(x) {
+        match self.log_sender.try_send(x) {
             Ok(_) => {}
             Err(e) => match e {
                 TrySendError::Full(_) => eprintln!("CHANNEL IS FULL"),
@@ -135,7 +151,16 @@ impl Logger {
     }
 }
 
-fn flush(batch: &Vec<LogObject>) {
+impl Drop for Logger {
+    // Attempt to flush
+    fn drop(&mut self) {
+        // Best effort
+        let _ = std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+fn flush_batch(batch: &[LogObject]) {
+    // let start = std::time::Instant::now();
     // Lock once for the whole batch
     let mut stderr = stderr().lock();
     for log in batch {
@@ -146,4 +171,7 @@ fn flush(batch: &Vec<LogObject>) {
         )
         .ok();
     }
+    // let duration = start.elapsed();
+
+    // println!("MAIN THREAD: {:?}", duration);
 }
