@@ -1,8 +1,10 @@
 use std::io::{Write, stderr};
 
+use chrono::Utc;
+use owo_colors::OwoColorize;
 use serde;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::{self};
 
@@ -52,22 +54,26 @@ impl Default for LoggerOptions {
     }
 }
 
+fn get_current_time() -> String {
+    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+}
 #[derive(Serialize)]
 struct LogObject {
     log_level: LogLevels,
     data: Value,
+    timestamp: String,
 }
 impl Default for LogObject {
     fn default() -> Self {
         Self {
             log_level: LogLevels::Info,
             data: serde_json::to_value(String::from("not set")).unwrap(),
+            timestamp: get_current_time(),
         }
     }
 }
 pub struct Logger {
     log_sender: tokio::sync::mpsc::Sender<LogObject>,
-    // shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
 
 impl Logger {
@@ -78,13 +84,12 @@ impl Logger {
         let batch_duration = options.batch_duration_ms.unwrap_or_default();
 
         let (log_sender, mut log_receiver) = tokio::sync::mpsc::channel::<LogObject>(buffer_size);
-        // let (shutdown_sender, mut shutdown_receiver) = tokio::sync::broadcast::channel::<()>(1);
 
         tokio::spawn(async move {
             let mut batch = Vec::<LogObject>::with_capacity(batch_size);
             let mut flush_interval =
                 tokio::time::interval(time::Duration::from_millis(batch_duration));
-            flush_interval.tick().await; // Skip the first tick
+            flush_interval.tick().await; // Skip the first tick which ahppens instantly
 
             loop {
                 tokio::select! {
@@ -94,7 +99,6 @@ impl Logger {
                                 // Found a log!
                                 batch.push(log);
                                 if batch.len() >= batch_size {
-                                    println!("Flushing");
                                     flush_batch(&batch);
                                     batch.clear();
                                 }
@@ -102,7 +106,6 @@ impl Logger {
                           None => {
                                 // Channel closed, flush before dropping
                                 if !batch.is_empty() {
-                                    println!("Flushing due to channel closure");
                                     flush_batch(&batch);
                                 }
                                 break;
@@ -110,9 +113,8 @@ impl Logger {
                         }
                     }
                     _ = flush_interval.tick() => {
-                        // Close and flush
+                        // Close and flush at every interval
                         if !batch.is_empty() {
-                            println!("Flushing due to batch time");
                             flush_batch(&batch);
                             batch.clear();
                         }
@@ -121,10 +123,7 @@ impl Logger {
             }
         });
 
-        Logger {
-            log_sender,
-            // shutdown_sender,
-        }
+        Logger { log_sender }
     }
 
     fn log<T: Serialize>(self: &Self, data: &T, log_level: LogLevels) {
@@ -139,6 +138,7 @@ impl Logger {
         let x = LogObject {
             log_level,
             data: value,
+            timestamp: get_current_time(),
         };
 
         match self.log_sender.try_send(x) {
@@ -167,26 +167,29 @@ impl Logger {
 }
 
 impl Drop for Logger {
-    // Attempt to flush
+    // Attempt to flush, best effort
     fn drop(&mut self) {
-        // Best effort
         let _ = std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
 
 fn flush_batch(batch: &[LogObject]) {
-    // let start = std::time::Instant::now();
     // Lock once for the whole batch
     let mut stderr = stderr().lock();
     for log in batch {
+        let with_color = match log.log_level {
+            LogLevels::Error => "ERROR".truecolor(255, 0, 0),
+            LogLevels::Info => "INFO".truecolor(15, 115, 255),
+            LogLevels::Warn => "WARN".truecolor(247, 155, 35),
+            LogLevels::Debug => "DEBUG".truecolor(38, 45, 56),
+        };
         writeln!(
             stderr,
-            "{}",
-            json!({"level": log.log_level, "data": log.data })
+            r#"{{"level":"{}","timestamp": {}, "data":{}}}"#,
+            with_color,
+            log.timestamp,
+            serde_json::to_string(&log.data).unwrap()
         )
         .ok();
     }
-    // let duration = start.elapsed();
-
-    // println!("MAIN THREAD: {:?}", duration);
 }

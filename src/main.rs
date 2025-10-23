@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use sajl::Logger;
 use serde::Serialize;
 
@@ -58,11 +56,10 @@ async fn main() {
         }],
     };
 
-    let start = Instant::now();
-    for _ in 0..100 {
+    for _ in 0..2 {
+        logger.info(&user);
+        logger.warn(&user);
         logger.error(&user);
+        logger.debug(&user);
     }
-
-    println!("FOR LOOP DONE SENDING {:?}", start.elapsed())
-    //
 }
