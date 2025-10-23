@@ -71,3 +71,4 @@ async fn main() {
 - Structured context fields
 - Global logger instance
 - Moar colors
+- Tests
