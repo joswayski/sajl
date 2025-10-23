@@ -9,6 +9,10 @@
 
 ## Usage
 
+```bash
+cargo add sajl serde
+```
+
 ```rust
 use sajl::Logger;
 use serde::Serialize;
